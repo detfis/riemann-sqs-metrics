@@ -1,0 +1,42 @@
+#!/usr/bin/env ruby
+ 
+require 'riemann/tools'
+
+class Riemann::Tools::PostgreSQSMetrics
+  include Riemann::Tools
+  require 'fog'
+
+  opt :aws_access_key_id, "Access key id for AWS", :type => String, :default => '1234'
+  opt :aws_secret_access_key_id, "Secret access key id for AWS", :type => String, :default => 'abcd'
+  opt :queue_url, "Queue URL", :type => String, :default => 'queue_url'
+  opt :metric, "Name of the metric", :type => String, :default => 'All' 
+  opt :service, "Name of the service", :type => String, :default => "sqs-metrics"
+
+
+  def initialize
+      @sqs = Fog::AWS::SQS.new(:aws_access_key_id => opts[:aws_access_key_id],
+                                    :aws_secret_access_key => opts[:aws_secret_access_key_id])
+
+  end
+
+  def tick
+    results = @sqs.get_queue_attributes(opts[:queue_url], opts[:metric])
+    if results
+      data = {}
+      results.body["Attributes"].each do |key, value|
+        data = {
+          :metric       => value.to_f,
+          :host         => opts[:queue_url],
+          :state        => 'ok',
+          :description  => key,
+          :tags         => ['sqs-metrics'],
+          :service      => opts[:service]
+        }
+        report(data)
+      end
+    end
+  end
+
+end
+
+Riemann::Tools::PostgreSQSMetrics.run
